@@ -1,0 +1,8 @@
+[submodule "aihubproject"]
+    path = aihubproject
+    url = git@github.com:thanawatkate/aihubproject.git
+
+[submodule "sitebase"]
+    path = sitebase
+    url = git@github.com:thanawatkate/sitebase.git
+   
