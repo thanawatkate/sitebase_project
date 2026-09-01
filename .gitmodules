@@ -1,6 +1,6 @@
 [submodule "aihubproject"]
-    path = aihubproject
-    url = git@github.com:thanawatkate/aihubproject.git
+	path = aihubproject
+	url = git@github.com:thanawatkate/aihubproject.git
 
 [submodule "sitebase"]
     path = sitebase
