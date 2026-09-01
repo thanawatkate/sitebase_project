@@ -3,6 +3,10 @@
 	url = git@github.com:thanawatkate/aihubproject.git
 
 [submodule "sitebase"]
-	path = sitebase
-	url = git@github.com:thanawatkate/sitebase.git
+    path = sitebase
+    url = git@github.com:thanawatkate/sitebase.git
    
+ 
+[submodule "cookebannersystem"]
+    path = cookebannersystem
+    url = git@github.com:thanawatkate/cookie-banner-system.git
