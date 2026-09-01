@@ -8,5 +8,5 @@
    
  
 [submodule "cookebannersystem"]
-    path = cookebannersystem
-    url = git@github.com:thanawatkate/cookie-banner-system.git
+	path = cookebannersystem
+	url = git@github.com:thanawatkate/cookie-banner-system.git
