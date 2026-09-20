@@ -1,0 +1,6 @@
+{
+  "name": "sitebases_project",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Container repository for sitebase, cookebannersystem, and aihubproject submodules"
+}
