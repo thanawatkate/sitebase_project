@@ -2,5 +2,10 @@
   "name": "sitebases_project",
   "private": true,
   "version": "1.0.0",
-  "description": "Container repository for sitebase, cookebannersystem, and aihubproject submodules"
+  "description": "Container repository for sitebase, cookebannersystem, and aihubproject submodules",
+  "scripts": {
+    "build:cookebanner": "npm --prefix cookebannersystem/backend run package:sharedhost-zip && node scripts/open-folder.js cookebannersystem/backend/sharedhost-release",
+    "build:cookebanner:backend": "npm --prefix cookebannersystem/backend run build && node scripts/open-folder.js cookebannersystem/backend/dist",
+    "build:cookebanner:frontend": "npm --prefix cookebannersystem/frontend run build && node scripts/open-folder.js cookebannersystem/frontend/dist"
+  }
 }
