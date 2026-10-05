@@ -268,10 +268,59 @@ if [[ "$stale_removed" == true ]]; then
   fi
 fi
 
+# Rewrite Windows/WSL absolute gitdir pointers to relative paths so
+# `git submodule` works from both Git for Windows and WSL.
+rel_gitdir_for_submodule() {
+  local path="$1"
+  local name="$2"
+  local prefix=""
+  local rest="${path%/}"
+  while [[ -n "$rest" ]]; do
+    prefix="../$prefix"
+    if [[ "$rest" == */* ]]; then
+      rest="${rest#*/}"
+    else
+      rest=""
+    fi
+  done
+  printf '%s.git/modules/%s' "$prefix" "$name"
+}
+
+normalize_submodule_gitdirs() {
+  local name path gitfile current expected
+  echo "==> Normalizing submodule gitdir pointers (relative, Windows/WSL-safe)..."
+  for name in "${SUBMODULE_NAMES[@]:-}"; do
+    [[ -z "$name" ]] && continue
+    path="${SUB_PATH[$name]}"
+    gitfile="$path/.git"
+    [[ -f "$gitfile" ]] || continue
+    expected="$(rel_gitdir_for_submodule "$path" "$name")"
+    current="$(tr -d '\r' < "$gitfile" | awk 'BEGIN { IGNORECASE=1 } $1=="gitdir:" { print $2; exit }')"
+    current="${current//\\//}"
+    current="${current%$'\r'}"
+    if [[ -z "$current" ]]; then
+      echo "  [WARN] $gitfile has no gitdir: line — skipping"
+      continue
+    fi
+    if [[ "$current" == "$expected" ]]; then
+      echo "  [OK] $path -> $expected"
+      continue
+    fi
+    echo "  -> $path/.git: $current -> $expected"
+    printf 'gitdir: %s\n' "$expected" > "$gitfile"
+  done
+}
+
 # ── step 2: sync URLs ──────────────────────────────────────────────────────────
 
+normalize_submodule_gitdirs
 echo "==> Syncing git submodule URLs from .gitmodules..."
-git submodule sync --recursive
+if ! git submodule sync --recursive; then
+  echo "[WARN] git submodule sync failed — continuing with clone/update."
+fi
+
+# Latest commit only — skip full history (sitebase is 200k+ objects).
+CLONE_FLAGS=(--depth 1 --single-branch --no-tags)
 
 # Clone a submodule listed in .gitmodules even if it was never `git submodule add`'d.
 ensure_submodule() {
@@ -301,14 +350,15 @@ ensure_submodule() {
     return 0
   fi
 
-  echo "  -> Cloning $name: $url -> $path"
-  if git submodule add -f "$url" "$path"; then
+  echo "  -> Cloning $name (shallow): $url -> $path"
+  git config "submodule.$name.shallow" true || true
+  if git submodule add -f --depth 1 -- "$url" "$path"; then
     return 0
   fi
 
   echo "  [INFO] git submodule add failed (entry may already be in .gitmodules) — cloning directly..."
   safe_rm_rf "$path"
-  if git clone "$url" "$path"; then
+  if git clone "${CLONE_FLAGS[@]}" -- "$url" "$path"; then
     git add "$path" || true
     return 0
   fi
@@ -351,9 +401,9 @@ done
 
 # ── step 4: init new submodules ───────────────────────────────────────────────
 
-echo "==> Initializing new submodules (skip existing)..."
-if ! git submodule update --init --recursive --no-fetch 2>/dev/null; then
-  git submodule update --init --recursive || echo "[WARN] submodule update --init failed (network?)"
+echo "==> Initializing new submodules (shallow, skip existing)..."
+if ! git submodule update --init --recursive --depth 1 --no-fetch 2>/dev/null; then
+  git submodule update --init --recursive --depth 1 || echo "[WARN] submodule update --init failed (network?)"
 fi
 
 # ── step 5: pull latest (preserving local changes) ────────────────────────────
@@ -375,7 +425,7 @@ fetch_origin() {
   local tries=3
   local i
   for i in $(seq 1 "$tries"); do
-    if git -C "$path" fetch origin; then
+    if git -C "$path" fetch --depth 1 --no-tags origin; then
       return 0
     fi
     echo "  [WARN] $path: fetch failed ($i/$tries) — retrying..."
@@ -399,8 +449,8 @@ pull_registered_submodule() {
   local default_branch
   default_branch=$(git -C "$path" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
   if [[ -z "$default_branch" ]]; then
-    default_branch=$(git -C "$path" remote show origin 2>/dev/null | awk '/HEAD branch/ {print $NF}')
-    [[ -z "$default_branch" ]] && default_branch="main"
+    default_branch=$(git -C "$path" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+    [[ "$default_branch" == "HEAD" || -z "$default_branch" ]] && default_branch="main"
   fi
 
   local stashed=false is_tracked_dirty=false has_untracked
@@ -431,7 +481,7 @@ pull_registered_submodule() {
     git -C "$path" merge --ff-only "origin/$default_branch" 2>/dev/null || \
       echo "  [WARN] $name: cannot fast-forward detached HEAD — manual merge required."
   else
-    if ! git -C "$path" pull --rebase origin "$current_branch" 2>/dev/null; then
+    if ! git -C "$path" pull --rebase --depth 1 origin "$current_branch" 2>/dev/null; then
       echo "  [ERROR] $name: pull --rebase failed. Aborting rebase and restoring stash."
       git -C "$path" rebase --abort 2>/dev/null || true
       restore_stash "$path" "$name" "$stashed"
